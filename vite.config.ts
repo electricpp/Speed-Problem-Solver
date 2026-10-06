@@ -14,7 +14,7 @@ export default defineConfig(() => {
         registerType: 'autoUpdate',
         includeAssets: ['icon.svg', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'],
         manifest: {
-          id: '/',
+          id: './',
           name: 'Velocity - Speed Problem Solver',
           short_name: 'Velocity',
           description: 'Speed training study tracker to solve Physics, Chemistry, and Math problems faster with precision timers.',
@@ -51,7 +51,7 @@ export default defineConfig(() => {
     ],
     resolve: {
       alias: {
-        '@': path.resolve(__dirname, '.'),
+        '@': path.resolve('.'),
       },
     },
     server: {
