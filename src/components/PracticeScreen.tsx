@@ -4,6 +4,7 @@ import {
   Volume2,
   VolumeX,
   Play,
+  Pause,
   RotateCcw,
   Sparkles,
   AlertCircle,
@@ -53,6 +54,7 @@ export const PracticeScreen: React.FC<PracticeScreenProps> = ({
 
   // State modes
   const [activeMode, setActiveMode] = useState<ActiveMode>('solving');
+  const [isSessionPaused, setIsSessionPaused] = useState<boolean>(false);
   
   // Goal and celebration states
   const [hasTriggeredGoalCelebration, setHasTriggeredGoalCelebration] = useState<boolean>(false);
@@ -70,20 +72,28 @@ export const PracticeScreen: React.FC<PracticeScreenProps> = ({
     setIsSoundOn(next);
   };
 
+  // Pause / Resume toggle handler
+  const handleTogglePause = () => {
+    soundManager.playClick();
+    triggerHaptic('light');
+    setIsSessionPaused((prev) => !prev);
+  };
+
   // Launch the session
   const handleStartPractice = () => {
     soundManager.playClick();
     triggerHaptic('success');
     setHasStarted(true);
+    setIsSessionPaused(false);
     setActiveMode('solving');
   };
 
-  // Main 1-second ticker
+  // Main 1-second ticker - completely stops while session is paused so paused time is never counted
   useEffect(() => {
-    if (!hasStarted) return;
+    if (!hasStarted || isSessionPaused) return;
 
     timerRef.current = window.setInterval(() => {
-      // Total session time always increments while active
+      // Total session time increments only while unpaused
       setTotalSessionSeconds((prev) => prev + 1);
 
       // Mode-specific timers
@@ -101,7 +111,7 @@ export const PracticeScreen: React.FC<PracticeScreenProps> = ({
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [hasStarted, activeMode]);
+  }, [hasStarted, isSessionPaused, activeMode]);
 
   // Check time constraint warning
   useEffect(() => {
@@ -272,6 +282,7 @@ export const PracticeScreen: React.FC<PracticeScreenProps> = ({
   const isTimeOver = timeLimitSeconds !== null && totalSessionSeconds >= timeLimitSeconds;
 
   const isModeStuckOrStudy = activeMode === 'stuck' || activeMode === 'study_concept';
+  const areButtonsDisabled = isModeStuckOrStudy || isSessionPaused;
 
   // Screen background flash if goal reached
   const celebrationBg = screenCelebrationFlash
@@ -281,9 +292,9 @@ export const PracticeScreen: React.FC<PracticeScreenProps> = ({
   // Ready / Start Screen before user begins solving
   if (!hasStarted) {
     return (
-      <div className="min-h-[100dvh] flex flex-col justify-between p-4 sm:p-6 max-w-xl mx-auto text-slate-100">
+      <div className="min-h-[100dvh] landscape:min-h-0 landscape:h-[100dvh] flex flex-col justify-between p-4 sm:p-6 landscape:py-2 landscape:px-6 max-w-xl landscape:max-w-3xl mx-auto text-slate-100">
         {/* Header */}
-        <div className="flex items-center justify-between py-2">
+        <div className="flex items-center justify-between py-2 landscape:py-1">
           <div className="flex items-center gap-2">
             <span className="px-3 py-1 rounded-lg text-xs font-bold uppercase tracking-wider bg-cyan-500/10 border border-cyan-500/30 text-cyan-400">
               {config.subject}
@@ -298,28 +309,28 @@ export const PracticeScreen: React.FC<PracticeScreenProps> = ({
         </div>
 
         {/* Center Prompt */}
-        <div className="text-center py-12 space-y-6">
-          <div className="w-20 h-20 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mx-auto shadow-lg shadow-cyan-500/10">
-            <Play className="w-10 h-10 translate-x-0.5 fill-current" />
+        <div className="text-center py-8 landscape:py-2 space-y-4 landscape:space-y-2">
+          <div className="w-16 h-16 landscape:w-12 landscape:h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mx-auto shadow-lg shadow-cyan-500/10">
+            <Play className="w-8 h-8 landscape:w-6 landscape:h-6 translate-x-0.5 fill-current" />
           </div>
 
-          <div className="space-y-2">
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+          <div className="space-y-1">
+            <h1 className="text-2xl sm:text-3xl landscape:text-xl font-extrabold text-white tracking-tight">
               Ready to Practice {config.subject}?
             </h1>
-            <p className="text-sm text-slate-400 max-w-md mx-auto">
+            <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto">
               Solving questions from your book. Timer starts immediately when you press Start.
             </p>
           </div>
 
           {/* Config Summary Card */}
-          <div className="grid grid-cols-2 gap-3 max-w-sm mx-auto p-4 rounded-xl bg-slate-900 border border-slate-800 text-left">
+          <div className="grid grid-cols-2 gap-3 max-w-sm mx-auto p-3.5 landscape:p-2.5 rounded-xl bg-slate-900 border border-slate-800 text-left">
             <div>
               <div className="text-xs text-slate-400 flex items-center gap-1.5">
                 <Target className="w-3.5 h-3.5 text-cyan-400" />
                 Target Goal
               </div>
-              <div className="text-lg font-bold text-white mt-1 font-tabular">
+              <div className="text-base sm:text-lg font-bold text-white mt-0.5 font-tabular">
                 {config.targetQuestions} Problems
               </div>
             </div>
@@ -328,7 +339,7 @@ export const PracticeScreen: React.FC<PracticeScreenProps> = ({
                 <Clock className="w-3.5 h-3.5 text-amber-400" />
                 Time Limit
               </div>
-              <div className="text-lg font-bold text-white mt-1 font-tabular">
+              <div className="text-base sm:text-lg font-bold text-white mt-0.5 font-tabular">
                 {config.timeConstraintMinutes ? `${config.timeConstraintMinutes} Min` : 'Open-ended'}
               </div>
             </div>
@@ -336,12 +347,12 @@ export const PracticeScreen: React.FC<PracticeScreenProps> = ({
         </div>
 
         {/* Start Button */}
-        <div className="pb-6">
+        <div className="pb-6 landscape:pb-2">
           <button
             onClick={handleStartPractice}
-            className="w-full h-14 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-extrabold text-base tracking-wide shadow-xl shadow-cyan-500/20 active:scale-[0.98] transition cursor-pointer flex items-center justify-center gap-2"
+            className="w-full h-14 landscape:h-11 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-extrabold text-base landscape:text-sm tracking-wide shadow-xl shadow-cyan-500/20 active:scale-[0.98] transition cursor-pointer flex items-center justify-center gap-2"
           >
-            <Play className="w-5 h-5 fill-current" />
+            <Play className="w-5 h-5 landscape:w-4 landscape:h-4 fill-current" />
             <span>START SESSION</span>
           </button>
         </div>
@@ -350,9 +361,9 @@ export const PracticeScreen: React.FC<PracticeScreenProps> = ({
   }
 
   return (
-    <div className={`min-h-[100dvh] flex flex-col justify-between transition-colors duration-500 ${celebrationBg}`}>
+    <div className={`min-h-[100dvh] landscape:h-[100dvh] landscape:max-h-[100dvh] landscape:overflow-hidden flex flex-col justify-between transition-colors duration-500 ${celebrationBg}`}>
       {/* Top Section: Progress & Session Timing */}
-      <div className="w-full max-w-2xl mx-auto px-4 pt-3 pb-2 space-y-3 shrink-0">
+      <div className="w-full max-w-4xl mx-auto px-4 pt-3 pb-2 landscape:pt-1.5 landscape:pb-1 space-y-2.5 landscape:space-y-1.5 shrink-0">
         {/* Top bar with Subject & Timers */}
         <div className="flex items-center justify-between">
           {/* Subject Badge */}
@@ -370,8 +381,32 @@ export const PracticeScreen: React.FC<PracticeScreenProps> = ({
             )}
           </div>
 
-          {/* Timers Cluster */}
+          {/* Timers & Controls Cluster */}
           <div className="flex items-center gap-2">
+            {/* Pause / Resume Session Button */}
+            <button
+              onClick={handleTogglePause}
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold border transition cursor-pointer ${
+                isSessionPaused
+                  ? 'bg-amber-500/20 border-amber-500/50 text-amber-300 ring-2 ring-amber-400/30'
+                  : 'bg-slate-800/80 hover:bg-slate-700/80 border-slate-700 text-slate-300 hover:text-white'
+              }`}
+              title={isSessionPaused ? 'Resume study session' : 'Pause session timers'}
+              aria-label={isSessionPaused ? 'Resume session' : 'Pause session'}
+            >
+              {isSessionPaused ? (
+                <>
+                  <Play className="w-3.5 h-3.5 text-amber-400 fill-current" />
+                  <span>Resume</span>
+                </>
+              ) : (
+                <>
+                  <Pause className="w-3.5 h-3.5 text-slate-400" />
+                  <span>Pause</span>
+                </>
+              )}
+            </button>
+
             {/* Audio Toggle */}
             <button
               onClick={handleToggleSound}
@@ -383,9 +418,14 @@ export const PracticeScreen: React.FC<PracticeScreenProps> = ({
             </button>
 
             {/* Total Session Stopwatch */}
-            <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-900 border border-slate-800 text-xs font-tabular">
+            <div className={`flex items-center gap-1.5 px-3 py-1 rounded-lg border text-xs font-tabular ${
+              isSessionPaused
+                ? 'bg-amber-950/30 border-amber-500/30 text-amber-300'
+                : 'bg-slate-900 border-slate-800 text-slate-300'
+            }`}>
               <Clock className="w-3.5 h-3.5 text-slate-400" />
-              <span className="text-slate-300 font-semibold">{formatDigitalTimer(totalSessionSeconds)}</span>
+              <span className="font-semibold">{formatDigitalTimer(totalSessionSeconds)}</span>
+              {isSessionPaused && <span className="text-[10px] text-amber-400 uppercase tracking-tight ml-0.5">(Paused)</span>}
             </div>
 
             {/* Time Constraint Countdown (if set) */}
@@ -404,7 +444,7 @@ export const PracticeScreen: React.FC<PracticeScreenProps> = ({
           </div>
         </div>
 
-        {/* Progress Bar Container */}
+        {/* Progress Bar Container - Thicker width */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between text-xs">
             <span className="text-slate-400">
@@ -419,12 +459,12 @@ export const PracticeScreen: React.FC<PracticeScreenProps> = ({
             </span>
           </div>
 
-          <div className="w-full h-2 rounded-full bg-slate-800/90 overflow-hidden border border-slate-800">
+          <div className="w-full h-3.5 sm:h-4 rounded-full bg-slate-800/90 overflow-hidden border border-slate-700/80 p-0.5 shadow-inner">
             <div
-              className={`h-full transition-all duration-300 ease-out ${
+              className={`h-full rounded-full transition-all duration-300 ease-out shadow-sm ${
                 solvedCount >= config.targetQuestions
-                  ? 'bg-gradient-to-r from-cyan-400 via-emerald-400 to-teal-300'
-                  : 'bg-gradient-to-r from-cyan-500 to-blue-500'
+                  ? 'bg-gradient-to-r from-cyan-400 via-emerald-400 to-teal-300 shadow-emerald-500/50'
+                  : 'bg-gradient-to-r from-cyan-500 to-blue-500 shadow-cyan-500/50'
               }`}
               style={{ width: `${Math.min(100, (solvedCount / config.targetQuestions) * 100)}%` }}
             />
@@ -432,164 +472,180 @@ export const PracticeScreen: React.FC<PracticeScreenProps> = ({
         </div>
       </div>
 
-      {/* Center Stage: Question Index & Live Timers */}
-      <div className="flex-1 flex flex-col items-center justify-center px-4 py-6 text-center max-w-xl mx-auto w-full select-none">
-        {/* Active Mode Notification Banner */}
-        {activeMode === 'stuck' && (
-          <div className="mb-4 px-4 py-2 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs sm:text-sm font-semibold flex items-center gap-2 animate-in fade-in duration-150">
-            <Search className="w-4 h-4 shrink-0 animate-bounce" />
-            <span>Investigating problem... Other buttons paused.</span>
-          </div>
-        )}
+      {/* Main Responsive Work Area: Portrait (stacked flex) vs Landscape (2-column side-by-side) */}
+      <div className="flex-1 w-full max-w-4xl mx-auto flex flex-col justify-between landscape:grid landscape:grid-cols-2 landscape:gap-6 landscape:items-center landscape:px-4 landscape:py-1 landscape:overflow-hidden">
+        {/* Left Column in Landscape / Center in Portrait: Question Display & Timers */}
+        <div className="flex flex-col items-center justify-center px-4 py-4 landscape:py-1 text-center select-none w-full">
+          {/* Active Mode Notification Banner */}
+          {activeMode === 'stuck' && (
+            <div className="mb-3 landscape:mb-1.5 px-3.5 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs sm:text-sm landscape:text-xs font-semibold flex items-center gap-2 animate-in fade-in duration-150">
+              <Search className="w-4 h-4 shrink-0 animate-bounce" />
+              <span>Investigating problem... Other buttons paused.</span>
+            </div>
+          )}
 
-        {activeMode === 'study_concept' && (
-          <div className="mb-4 px-4 py-2 rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 text-xs sm:text-sm font-semibold flex items-center gap-2 animate-in fade-in duration-150">
-            <BookOpen className="w-4 h-4 shrink-0 animate-bounce" />
-            <span>Studying concept / formulas... Other buttons paused.</span>
-          </div>
-        )}
+          {activeMode === 'study_concept' && (
+            <div className="mb-3 landscape:mb-1.5 px-3.5 py-1.5 rounded-xl bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 text-xs sm:text-sm landscape:text-xs font-semibold flex items-center gap-2 animate-in fade-in duration-150">
+              <BookOpen className="w-4 h-4 shrink-0 animate-bounce" />
+              <span>Studying concept / formulas... Other buttons paused.</span>
+            </div>
+          )}
 
-        {/* Giant Question Display with clear anti-overlap spacing */}
-        <div className="relative py-2 sm:py-4 flex flex-col items-center">
-          {/* Label placed above Q to completely prevent any descender collision from Exo 2 font */}
-          <div className="mb-3 px-3.5 py-1 rounded-full bg-slate-800/80 border border-slate-700/80 text-[11px] sm:text-xs uppercase tracking-widest text-slate-300 font-semibold shadow-sm">
-            Current Problem
-          </div>
+          {isSessionPaused && (
+            <div className="mb-3 landscape:mb-1.5 px-3.5 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs sm:text-sm landscape:text-xs font-semibold flex items-center gap-2 animate-in fade-in duration-150">
+              <Pause className="w-4 h-4 shrink-0 text-amber-400" />
+              <span>Session paused. Timers are not counting.</span>
+            </div>
+          )}
 
-          <div
-            className={`text-7xl sm:text-8xl md:text-9xl font-black tracking-tight leading-none pb-6 sm:pb-8 transition-all duration-200 select-none ${
-              activeMode === 'solving'
-                ? 'text-white drop-shadow-[0_0_35px_rgba(6,182,212,0.35)]'
-                : activeMode === 'stuck'
-                ? 'text-amber-400/90 drop-shadow-[0_0_35px_rgba(245,158,11,0.25)]'
-                : 'text-indigo-400/90 drop-shadow-[0_0_35px_rgba(99,102,241,0.25)]'
-            }`}
-          >
-            Q{currentQuestionNumber}
-          </div>
-        </div>
+          {/* Giant Question Display with clear anti-overlap spacing */}
+          <div className="relative py-2 landscape:py-0 flex flex-col items-center">
+            {/* Label placed above Q to completely prevent any descender collision from Exo 2 font */}
+            <div className="mb-2 landscape:mb-1 px-3.5 py-0.5 rounded-full bg-slate-800/80 border border-slate-700/80 text-[11px] sm:text-xs landscape:text-[10px] uppercase tracking-widest text-slate-300 font-semibold shadow-sm">
+              Current Problem
+            </div>
 
-        {/* Live Question Pure Solve Timer */}
-        <div className="mt-4 flex flex-col items-center">
-          <div className="text-xs text-slate-400 mb-1 flex items-center gap-1.5 font-medium">
-            <Clock className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Time on this question:</span>
-          </div>
-          <div
-            className={`text-2xl sm:text-3xl font-bold font-tabular tracking-wider ${
-              activeMode === 'solving' ? 'text-cyan-300' : 'text-slate-500 line-through opacity-60'
-            }`}
-          >
-            {formatDigitalTimer(questionPureSeconds)}
-          </div>
-        </div>
-
-        {/* Secondary timers summary for this question (if any stuck or study was spent) */}
-        {(investigationSeconds > 0 || studyConceptSeconds > 0) && (
-          <div className="mt-3 flex items-center gap-3 text-xs text-slate-400 font-tabular">
-            {investigationSeconds > 0 && (
-              <span className="text-amber-400/90">
-                Stuck: {formatDigitalTimer(investigationSeconds)}
-              </span>
-            )}
-            {investigationSeconds > 0 && studyConceptSeconds > 0 && <span>·</span>}
-            {studyConceptSeconds > 0 && (
-              <span className="text-indigo-400/90">
-                Concept: {formatDigitalTimer(studyConceptSeconds)}
-              </span>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Bottom Area: Controls & Buttons */}
-      <div className="w-full max-w-xl mx-auto px-4 pb-6 sm:pb-8 pt-2 space-y-3 shrink-0">
-        {/* Contextual "Skip" button (Only visible when Stuck / Investigating) */}
-        {activeMode === 'stuck' && (
-          <div className="animate-in slide-in-from-bottom-2 duration-150">
-            <button
-              onClick={handleSkipProblem}
-              className="w-full h-12 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 font-bold text-sm tracking-wide transition active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2 shadow-lg"
+            <div
+              className={`text-7xl sm:text-8xl md:text-9xl landscape:text-5xl font-black tracking-tight leading-none pb-4 sm:pb-6 landscape:pb-1 transition-all duration-200 select-none ${
+                isSessionPaused
+                  ? 'text-slate-400 opacity-60'
+                  : activeMode === 'solving'
+                  ? 'text-white drop-shadow-[0_0_35px_rgba(6,182,212,0.35)]'
+                  : activeMode === 'stuck'
+                  ? 'text-amber-400/90 drop-shadow-[0_0_35px_rgba(245,158,11,0.25)]'
+                  : 'text-indigo-400/90 drop-shadow-[0_0_35px_rgba(99,102,241,0.25)]'
+              }`}
             >
-              <FastForward className="w-4 h-4" />
-              <span>Skip Problem (Log as Skipped & Next Q)</span>
+              Q{currentQuestionNumber}
+            </div>
+          </div>
+
+          {/* Live Question Pure Solve Timer */}
+          <div className="mt-2 landscape:mt-1 flex flex-col items-center">
+            <div className="text-xs landscape:text-[11px] text-slate-400 mb-0.5 flex items-center gap-1.5 font-medium">
+              <Clock className="w-3.5 h-3.5 text-cyan-400" />
+              <span>Time on this question:</span>
+            </div>
+            <div
+              className={`text-2xl sm:text-3xl landscape:text-xl font-bold font-tabular tracking-wider ${
+                isSessionPaused
+                  ? 'text-amber-300 opacity-70'
+                  : activeMode === 'solving'
+                  ? 'text-cyan-300'
+                  : 'text-slate-500 line-through opacity-60'
+              }`}
+            >
+              {formatDigitalTimer(questionPureSeconds)}
+            </div>
+          </div>
+
+          {/* Secondary timers summary for this question (if any stuck or study was spent) */}
+          {(investigationSeconds > 0 || studyConceptSeconds > 0) && (
+            <div className="mt-2 landscape:mt-1 flex items-center gap-3 text-xs landscape:text-[11px] text-slate-400 font-tabular">
+              {investigationSeconds > 0 && (
+                <span className="text-amber-400/90">
+                  Stuck: {formatDigitalTimer(investigationSeconds)}
+                </span>
+              )}
+              {investigationSeconds > 0 && studyConceptSeconds > 0 && <span>·</span>}
+              {studyConceptSeconds > 0 && (
+                <span className="text-indigo-400/90">
+                  Concept: {formatDigitalTimer(studyConceptSeconds)}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Right Column in Landscape / Bottom in Portrait: Controls & Buttons */}
+        <div className="w-full max-w-xl mx-auto px-4 pb-6 sm:pb-8 pt-2 space-y-3 landscape:pb-1 landscape:pt-0 landscape:space-y-2 shrink-0">
+          {/* Contextual "Skip" button (Only visible when Stuck / Investigating) */}
+          {activeMode === 'stuck' && (
+            <div className="animate-in slide-in-from-bottom-2 duration-150">
+              <button
+                onClick={handleSkipProblem}
+                className="w-full h-12 landscape:h-9 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-200 font-bold text-sm landscape:text-xs tracking-wide transition active:scale-[0.98] cursor-pointer flex items-center justify-center gap-2 shadow-lg"
+              >
+                <FastForward className="w-4 h-4" />
+                <span>Skip Problem (Log as Skipped & Next Q)</span>
+              </button>
+            </div>
+          )}
+
+          {/* Primary Action Button: "Done Solving" */}
+          <button
+            onClick={handleDoneSolving}
+            disabled={areButtonsDisabled}
+            className={`w-full h-16 landscape:h-12 rounded-2xl font-black text-lg landscape:text-base tracking-wider transition-all duration-200 flex items-center justify-center gap-2.5 shadow-xl ${
+              areButtonsDisabled
+                ? 'bg-slate-800/40 border border-slate-800 text-slate-600 cursor-not-allowed shadow-none'
+                : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/25 active:scale-[0.98] cursor-pointer'
+            }`}
+          >
+            <CheckCircle2 className={`w-6 h-6 landscape:w-5 landscape:h-5 ${areButtonsDisabled ? 'text-slate-600' : 'text-slate-950'}`} />
+            <span>DONE SOLVING</span>
+          </button>
+
+          {/* Middle Dual Mode Buttons: "Stuck" & "Study Concept" */}
+          <div className="grid grid-cols-2 gap-3 landscape:gap-2">
+            {/* Button 2: Stuck / Investigating */}
+            <button
+              onClick={handleToggleStuck}
+              disabled={activeMode === 'study_concept' || isSessionPaused}
+              className={`h-14 landscape:h-10 rounded-xl font-bold text-xs sm:text-sm landscape:text-xs tracking-wide transition-all duration-150 flex items-center justify-center gap-1.5 px-2 ${
+                activeMode === 'study_concept' || isSessionPaused
+                  ? 'bg-slate-800/40 border border-slate-800 text-slate-600 cursor-not-allowed'
+                  : activeMode === 'stuck'
+                  ? 'bg-amber-500 text-slate-950 ring-2 ring-amber-300 font-extrabold shadow-lg shadow-amber-500/30 active:scale-95 cursor-pointer'
+                  : 'bg-slate-800/90 hover:bg-amber-950/40 border border-amber-500/30 text-amber-400 hover:border-amber-500/60 active:scale-95 cursor-pointer'
+              }`}
+            >
+              <Search className="w-4 h-4 shrink-0" />
+              <span className="truncate">
+                {activeMode === 'stuck'
+                  ? `Investigating ${formatDigitalTimer(investigationSeconds)}`
+                  : 'Stuck'}
+              </span>
+            </button>
+
+            {/* Button 3: Study Concept */}
+            <button
+              onClick={handleToggleStudyConcept}
+              disabled={activeMode === 'stuck' || isSessionPaused}
+              className={`h-14 landscape:h-10 rounded-xl font-bold text-xs sm:text-sm landscape:text-xs tracking-wide transition-all duration-150 flex items-center justify-center gap-1.5 px-2 ${
+                activeMode === 'stuck' || isSessionPaused
+                  ? 'bg-slate-800/40 border border-slate-800 text-slate-600 cursor-not-allowed'
+                  : activeMode === 'study_concept'
+                  ? 'bg-indigo-500 text-white ring-2 ring-indigo-300 font-extrabold shadow-lg shadow-indigo-500/30 active:scale-95 cursor-pointer'
+                  : 'bg-slate-800/90 hover:bg-indigo-950/40 border border-indigo-500/30 text-indigo-400 hover:border-indigo-500/60 active:scale-95 cursor-pointer'
+              }`}
+            >
+              <BookOpen className="w-4 h-4 shrink-0" />
+              <span className="truncate">
+                {activeMode === 'study_concept'
+                  ? `Studying Concept ${formatDigitalTimer(studyConceptSeconds)}`
+                  : 'Study Concept'}
+              </span>
             </button>
           </div>
-        )}
 
-        {/* Primary Action Button: "Done Solving" */}
-        <button
-          onClick={handleDoneSolving}
-          disabled={isModeStuckOrStudy}
-          className={`w-full h-16 rounded-2xl font-black text-lg tracking-wider transition-all duration-200 flex items-center justify-center gap-2.5 shadow-xl ${
-            isModeStuckOrStudy
-              ? 'bg-slate-800/40 border border-slate-800 text-slate-600 cursor-not-allowed shadow-none'
-              : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-emerald-500/25 active:scale-[0.98] cursor-pointer'
-          }`}
-        >
-          <CheckCircle2 className={`w-6 h-6 ${isModeStuckOrStudy ? 'text-slate-600' : 'text-slate-950'}`} />
-          <span>DONE SOLVING</span>
-        </button>
-
-        {/* Middle Dual Mode Buttons: "Stuck" & "Study Concept" */}
-        <div className="grid grid-cols-2 gap-3">
-          {/* Button 2: Stuck / Investigating */}
+          {/* Button 4: End Session */}
           <button
-            onClick={handleToggleStuck}
-            disabled={activeMode === 'study_concept'}
-            className={`h-14 rounded-xl font-bold text-xs sm:text-sm tracking-wide transition-all duration-150 flex items-center justify-center gap-1.5 px-2 ${
-              activeMode === 'study_concept'
+            onClick={() => {
+              soundManager.playClick();
+              setShowEndConfirm(true);
+            }}
+            disabled={isModeStuckOrStudy}
+            className={`w-full h-11 landscape:h-8.5 rounded-xl text-xs sm:text-sm landscape:text-xs font-semibold transition-all duration-150 flex items-center justify-center gap-1.5 ${
+              isModeStuckOrStudy
                 ? 'bg-slate-800/40 border border-slate-800 text-slate-600 cursor-not-allowed'
-                : activeMode === 'stuck'
-                ? 'bg-amber-500 text-slate-950 ring-2 ring-amber-300 font-extrabold shadow-lg shadow-amber-500/30 active:scale-95 cursor-pointer'
-                : 'bg-slate-800/90 hover:bg-amber-950/40 border border-amber-500/30 text-amber-400 hover:border-amber-500/60 active:scale-95 cursor-pointer'
+                : 'bg-slate-900 hover:bg-red-950/40 border border-slate-800 hover:border-red-500/30 text-slate-400 hover:text-red-400 active:scale-95 cursor-pointer'
             }`}
           >
-            <Search className="w-4 h-4 shrink-0" />
-            <span className="truncate">
-              {activeMode === 'stuck'
-                ? `Investigating ${formatDigitalTimer(investigationSeconds)}`
-                : 'Stuck'}
-            </span>
-          </button>
-
-          {/* Button 3: Study Concept */}
-          <button
-            onClick={handleToggleStudyConcept}
-            disabled={activeMode === 'stuck'}
-            className={`h-14 rounded-xl font-bold text-xs sm:text-sm tracking-wide transition-all duration-150 flex items-center justify-center gap-1.5 px-2 ${
-              activeMode === 'stuck'
-                ? 'bg-slate-800/40 border border-slate-800 text-slate-600 cursor-not-allowed'
-                : activeMode === 'study_concept'
-                ? 'bg-indigo-500 text-white ring-2 ring-indigo-300 font-extrabold shadow-lg shadow-indigo-500/30 active:scale-95 cursor-pointer'
-                : 'bg-slate-800/90 hover:bg-indigo-950/40 border border-indigo-500/30 text-indigo-400 hover:border-indigo-500/60 active:scale-95 cursor-pointer'
-            }`}
-          >
-            <BookOpen className="w-4 h-4 shrink-0" />
-            <span className="truncate">
-              {activeMode === 'study_concept'
-                ? `Studying Concept ${formatDigitalTimer(studyConceptSeconds)}`
-                : 'Study Concept'}
-            </span>
+            <LogOut className="w-4 h-4" />
+            <span>End Session</span>
           </button>
         </div>
-
-        {/* Button 4: End Session */}
-        <button
-          onClick={() => {
-            soundManager.playClick();
-            setShowEndConfirm(true);
-          }}
-          disabled={isModeStuckOrStudy}
-          className={`w-full h-11 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-150 flex items-center justify-center gap-1.5 ${
-            isModeStuckOrStudy
-              ? 'bg-slate-800/40 border border-slate-800 text-slate-600 cursor-not-allowed'
-              : 'bg-slate-900 hover:bg-red-950/40 border border-slate-800 hover:border-red-500/30 text-slate-400 hover:text-red-400 active:scale-95 cursor-pointer'
-          }`}
-        >
-          <LogOut className="w-4 h-4" />
-          <span>End Session</span>
-        </button>
       </div>
 
       {/* End Session Confirmation Modal */}

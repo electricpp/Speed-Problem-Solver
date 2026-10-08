@@ -1,8 +1,25 @@
-import React, { useState } from 'react';
-import { X, Trash2, Calendar, Clock, Copy, Check, AlertTriangle, ChevronRight, Activity, BookOpen, Search } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import {
+  X,
+  Trash2,
+  Calendar,
+  Clock,
+  Copy,
+  Check,
+  AlertTriangle,
+  ChevronRight,
+  Activity,
+  BookOpen,
+  Search,
+  Download,
+  Upload,
+  CheckCircle2,
+  FileJson,
+} from 'lucide-react';
 import { SessionReport } from '../types';
 import { formatHumanDuration, formatMinutesText, generateReportCopyText } from '../utils/formatters';
 import { triggerHaptic, soundManager } from '../utils/audio';
+import { exportHistoryToFile, importHistoryFromFile } from '../utils/storage';
 
 interface HistoryModalProps {
   isOpen: boolean;
@@ -10,6 +27,7 @@ interface HistoryModalProps {
   history: SessionReport[];
   onDeleteSession: (id: string) => void;
   onClearAll: () => void;
+  onImportHistory?: (updated: SessionReport[]) => void;
 }
 
 export const HistoryModal: React.FC<HistoryModalProps> = ({
@@ -18,10 +36,14 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
   history,
   onDeleteSession,
   onClearAll,
+  onImportHistory,
 }) => {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [importStatus, setImportStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   if (!isOpen) return null;
 
@@ -33,6 +55,45 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
       setCopiedId(report.id);
       setTimeout(() => setCopiedId(null), 2000);
     });
+  };
+
+  const handleExport = () => {
+    soundManager.playClick();
+    triggerHaptic('success');
+    exportHistoryToFile(history);
+  };
+
+  const handleImportClick = () => {
+    soundManager.playClick();
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const result = await importHistoryFromFile(file);
+      if (result.success) {
+        soundManager.playDopamineChime();
+        triggerHaptic('success');
+        setImportStatus({ type: 'success', message: result.message || 'History imported successfully!' });
+        if (onImportHistory) {
+          onImportHistory(result.updated);
+        }
+      } else {
+        triggerHaptic('warning');
+        setImportStatus({ type: 'error', message: result.message || 'Failed to import JSON file.' });
+      }
+    } catch {
+      triggerHaptic('warning');
+      setImportStatus({ type: 'error', message: 'Failed to process the uploaded file.' });
+    }
+
+    if (e.target) {
+      e.target.value = '';
+    }
+    setTimeout(() => setImportStatus(null), 4000);
   };
 
   const getSubjectColor = (subj: string) => {
@@ -51,8 +112,18 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-6 animate-in fade-in duration-200">
       <div className="w-full max-w-2xl max-h-[90vh] flex flex-col rounded-2xl bg-slate-900 border border-slate-800 shadow-2xl overflow-hidden">
+        {/* Hidden file input for JSON import */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleFileChange}
+          accept=".json,application/json"
+          className="hidden"
+          aria-hidden="true"
+        />
+
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800/80 bg-slate-900/60 shrink-0">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between px-5 py-4 border-b border-slate-800/80 bg-slate-900/60 shrink-0 gap-3">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400">
               <Calendar className="w-4 h-4" />
@@ -63,18 +134,45 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Action Tools: Export, Import, Clear */}
+          <div className="flex items-center flex-wrap gap-1.5 self-end sm:self-auto">
+            {/* Export JSON Button */}
+            <button
+              onClick={handleExport}
+              disabled={history.length === 0}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-semibold transition cursor-pointer ${
+                history.length === 0
+                  ? 'border-slate-800 bg-slate-800/40 text-slate-600 cursor-not-allowed'
+                  : 'border-cyan-500/30 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20'
+              }`}
+              title="Export all session history as a JSON file"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Export (.json)</span>
+            </button>
+
+            {/* Import JSON Button */}
+            <button
+              onClick={handleImportClick}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-indigo-500/30 bg-indigo-500/10 text-indigo-300 hover:bg-indigo-500/20 text-xs font-semibold transition cursor-pointer"
+              title="Upload and restore a history JSON file"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              <span>Import</span>
+            </button>
+
+            {/* Clear History Button */}
             {history.length > 0 && !showClearConfirm && (
               <button
                 onClick={() => {
                   soundManager.playClick();
                   setShowClearConfirm(true);
                 }}
-                className="px-2.5 py-1.5 rounded-lg border border-red-500/20 bg-red-500/10 text-red-400 hover:bg-red-500/20 text-xs font-medium transition cursor-pointer flex items-center gap-1.5"
+                className="px-2.5 py-1.5 rounded-lg border border-red-500/20 bg-red-500/10 text-red-400 hover:bg-red-500/20 text-xs font-medium transition cursor-pointer flex items-center gap-1"
                 title="Clear all stored sessions"
               >
                 <Trash2 className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Clear History</span>
+                <span className="hidden sm:inline">Clear</span>
               </button>
             )}
 
@@ -83,13 +181,31 @@ export const HistoryModal: React.FC<HistoryModalProps> = ({
                 soundManager.playClick();
                 onClose();
               }}
-              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer"
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition cursor-pointer ml-1"
               aria-label="Close modal"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
+
+        {/* Import Status Toast Banner */}
+        {importStatus && (
+          <div
+            className={`px-4 py-2.5 border-b text-xs flex items-center gap-2 animate-in fade-in ${
+              importStatus.type === 'success'
+                ? 'bg-emerald-950/40 border-emerald-800 text-emerald-200'
+                : 'bg-red-950/40 border-red-800 text-red-200'
+            }`}
+          >
+            {importStatus.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            ) : (
+              <AlertTriangle className="w-4 h-4 text-red-400 shrink-0" />
+            )}
+            <span>{importStatus.message}</span>
+          </div>
+        )}
 
         {/* Clear Confirmation Warning */}
         {showClearConfirm && (

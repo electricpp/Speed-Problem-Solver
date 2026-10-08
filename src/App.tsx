@@ -325,6 +325,7 @@ export default function App() {
         history={history}
         onDeleteSession={handleDeleteSession}
         onClearAll={handleClearAllHistory}
+        onImportHistory={(updated) => setHistory(updated)}
       />
     </div>
   );

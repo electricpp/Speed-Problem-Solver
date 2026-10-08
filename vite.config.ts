@@ -5,8 +5,12 @@ import {defineConfig} from 'vite';
 import {VitePWA} from 'vite-plugin-pwa';
 
 export default defineConfig(() => {
+  // Determine base path: if deployed via GitHub Actions or repository name is known
+  const repoName = process.env.GITHUB_REPOSITORY ? process.env.GITHUB_REPOSITORY.split('/')[1] : '';
+  const base = process.env.BASE_PATH || (repoName ? `/${repoName}/` : './');
+
   return {
-    base: './',
+    base,
     plugins: [
       react(),
       tailwindcss(),
@@ -14,30 +18,30 @@ export default defineConfig(() => {
         registerType: 'autoUpdate',
         includeAssets: ['icon.svg', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'],
         manifest: {
-          id: './',
+          id: base,
           name: 'Velocity - Speed Problem Solver',
           short_name: 'Velocity',
           description: 'Speed training study tracker to solve Physics, Chemistry, and Math problems faster with precision timers.',
           theme_color: '#090d16',
           background_color: '#090d16',
           display: 'standalone',
-          start_url: './',
-          scope: './',
+          start_url: base,
+          scope: base,
           icons: [
             {
-              src: './icon-192.png',
+              src: 'icon-192.png',
               sizes: '192x192',
               type: 'image/png',
               purpose: 'any',
             },
             {
-              src: './icon-512.png',
+              src: 'icon-512.png',
               sizes: '512x512',
               type: 'image/png',
               purpose: 'any',
             },
             {
-              src: './icon-512.png',
+              src: 'icon-512.png',
               sizes: '512x512',
               type: 'image/png',
               purpose: 'maskable',
@@ -45,7 +49,7 @@ export default defineConfig(() => {
           ],
         },
         devOptions: {
-          enabled: true,
+          enabled: false,
         },
       }),
     ],

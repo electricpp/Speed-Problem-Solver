@@ -6,9 +6,15 @@ class SoundManager {
   private soundEnabled: boolean = true;
 
   constructor() {
-    const saved = localStorage.getItem('velocity_sound_enabled');
-    if (saved !== null) {
-      this.soundEnabled = saved === 'true';
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const saved = localStorage.getItem('velocity_sound_enabled');
+        if (saved !== null) {
+          this.soundEnabled = saved === 'true';
+        }
+      }
+    } catch {
+      // Safe fallback if storage is restricted
     }
   }
 
@@ -18,7 +24,11 @@ class SoundManager {
 
   public setEnabled(enabled: boolean): void {
     this.soundEnabled = enabled;
-    localStorage.setItem('velocity_sound_enabled', String(enabled));
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        localStorage.setItem('velocity_sound_enabled', String(enabled));
+      }
+    } catch {}
   }
 
   public toggleSound(): boolean {

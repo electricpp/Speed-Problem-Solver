@@ -57,6 +57,7 @@ export function formatMinutesText(totalSeconds: number): string {
 
 /**
  * Generates the clean text format requested by the user, perfect for clipboard sharing.
+ * Includes full subject metrics and detailed question-by-question solve logs.
  */
 export function generateReportCopyText(report: SessionReport): string {
   const durationText = formatHumanDuration(report.totalSessionTime);
@@ -68,12 +69,30 @@ export function generateReportCopyText(report: SessionReport): string {
     ? report.skippedQuestions.map(q => `Q${q}`).join(', ')
     : 'None';
 
-  return [
+  const lines = [
     `Studied ${report.subject} for ${durationText}.`,
     `Total Problems solved: ${report.totalProblemsSolved}`,
     `Time per problem: ${timePerProblemText}`,
     `Total time on Investigation: ${formatMinutesText(report.totalInvestigationTime)}`,
     `Total time on Studying concept: ${formatMinutesText(report.totalStudyConceptTime)}`,
     `Skipped Questions: ${skippedText}`,
-  ].join('\n');
+  ];
+
+  if (report.questionDetails && report.questionDetails.length > 0) {
+    lines.push('');
+    lines.push('--- Question Logs ---');
+    report.questionDetails.forEach((q) => {
+      const statusLabel = q.status === 'solved' ? 'Solved' : 'Skipped';
+      let qLine = `Q${q.questionNumber}: ${formatMinutesText(Math.round(q.pureSolveTime))} (${statusLabel})`;
+      const extras: string[] = [];
+      if (q.stuckTime > 0) extras.push(`Stuck: ${formatMinutesText(q.stuckTime)}`);
+      if (q.studyConceptTime > 0) extras.push(`Concept: ${formatMinutesText(q.studyConceptTime)}`);
+      if (extras.length > 0) {
+        qLine += ` [${extras.join(', ')}]`;
+      }
+      lines.push(qLine);
+    });
+  }
+
+  return lines.join('\n');
 }
