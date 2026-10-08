@@ -272,6 +272,104 @@ export const PracticeScreen: React.FC<PracticeScreenProps> = ({
     }, 450);
   };
 
+  const isModeStuckOrStudy = activeMode === 'stuck' || activeMode === 'study_concept';
+  const areButtonsDisabled = isModeStuckOrStudy || isSessionPaused;
+
+  // PC Keyboard Shortcuts Handler
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if user is typing in an input or textarea
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement ||
+        e.target instanceof HTMLSelectElement
+      ) {
+        return;
+      }
+
+      // If not started yet, Space or Enter begins the session
+      if (!hasStarted) {
+        if (e.key === 'Enter' || e.code === 'Space') {
+          e.preventDefault();
+          handleStartPractice();
+        }
+        return;
+      }
+
+      if (isEndingSession) return;
+
+      // If End Session confirmation modal is open:
+      if (showEndConfirm) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          handleConfirmEndSession();
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          setShowEndConfirm(false);
+        }
+        return;
+      }
+
+      // 1. Space -> "Done Solving"
+      if (e.code === 'Space' || e.key === ' ') {
+        e.preventDefault();
+        if (!areButtonsDisabled && activeMode === 'solving') {
+          handleDoneSolving();
+        }
+      }
+      // 2. Enter -> "End Session"
+      else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (!isModeStuckOrStudy && !isEndingSession) {
+          soundManager.playClick();
+          setShowEndConfirm(true);
+        }
+      }
+      // 3. S or s -> "Stuck"
+      else if (e.key === 's' || e.key === 'S') {
+        e.preventDefault();
+        if (activeMode !== 'study_concept' && !isSessionPaused) {
+          handleToggleStuck();
+        }
+      }
+      // 4. C or c -> "Study Concept"
+      else if (e.key === 'c' || e.key === 'C') {
+        e.preventDefault();
+        if (activeMode !== 'stuck' && !isSessionPaused) {
+          handleToggleStudyConcept();
+        }
+      }
+      // Bonus shortcut: P or p -> Pause / Resume
+      else if (e.key === 'p' || e.key === 'P') {
+        e.preventDefault();
+        handleTogglePause();
+      }
+      // Bonus shortcut: K or k -> Skip Problem (while in Stuck mode)
+      else if ((e.key === 'k' || e.key === 'K') && activeMode === 'stuck') {
+        e.preventDefault();
+        handleSkipProblem();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [
+    hasStarted,
+    isEndingSession,
+    showEndConfirm,
+    areButtonsDisabled,
+    activeMode,
+    isSessionPaused,
+    isModeStuckOrStudy,
+    currentQuestionNumber,
+    questionPureSeconds,
+    investigationSeconds,
+    studyConceptSeconds,
+    completedRecords,
+  ]);
+
   // Progress metrics
   const solvedCount = completedRecords.filter((r) => r.status === 'solved').length;
   const progressPercent = Math.min(100, Math.round((solvedCount / config.targetQuestions) * 100));
@@ -280,9 +378,6 @@ export const PracticeScreen: React.FC<PracticeScreenProps> = ({
   const timeLimitSeconds = config.timeConstraintMinutes ? config.timeConstraintMinutes * 60 : null;
   const timeRemainingSeconds = timeLimitSeconds !== null ? Math.max(0, timeLimitSeconds - totalSessionSeconds) : null;
   const isTimeOver = timeLimitSeconds !== null && totalSessionSeconds >= timeLimitSeconds;
-
-  const isModeStuckOrStudy = activeMode === 'stuck' || activeMode === 'study_concept';
-  const areButtonsDisabled = isModeStuckOrStudy || isSessionPaused;
 
   // Screen background flash if goal reached
   const celebrationBg = screenCelebrationFlash
@@ -584,6 +679,9 @@ export const PracticeScreen: React.FC<PracticeScreenProps> = ({
           >
             <CheckCircle2 className={`w-6 h-6 landscape:w-5 landscape:h-5 ${areButtonsDisabled ? 'text-slate-600' : 'text-slate-950'}`} />
             <span>DONE SOLVING</span>
+            <kbd className="hidden sm:inline-flex items-center px-2 py-0.5 rounded bg-black/20 text-slate-950 border border-black/15 text-[11px] font-mono font-bold tracking-normal ml-1">
+              Space
+            </kbd>
           </button>
 
           {/* Middle Dual Mode Buttons: "Stuck" & "Study Concept" */}
@@ -606,6 +704,9 @@ export const PracticeScreen: React.FC<PracticeScreenProps> = ({
                   ? `Investigating ${formatDigitalTimer(investigationSeconds)}`
                   : 'Stuck'}
               </span>
+              <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.2 rounded bg-slate-900/60 border border-slate-700/80 text-slate-300 text-[10px] font-mono ml-0.5">
+                S
+              </kbd>
             </button>
 
             {/* Button 3: Study Concept */}
@@ -626,6 +727,9 @@ export const PracticeScreen: React.FC<PracticeScreenProps> = ({
                   ? `Studying Concept ${formatDigitalTimer(studyConceptSeconds)}`
                   : 'Study Concept'}
               </span>
+              <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.2 rounded bg-slate-900/60 border border-slate-700/80 text-slate-300 text-[10px] font-mono ml-0.5">
+                C
+              </kbd>
             </button>
           </div>
 
@@ -644,6 +748,9 @@ export const PracticeScreen: React.FC<PracticeScreenProps> = ({
           >
             <LogOut className="w-4 h-4" />
             <span>End Session</span>
+            <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.2 rounded bg-slate-800 border border-slate-700 text-slate-400 text-[10px] font-mono ml-1">
+              Enter
+            </kbd>
           </button>
         </div>
       </div>
@@ -667,15 +774,21 @@ export const PracticeScreen: React.FC<PracticeScreenProps> = ({
             <div className="pt-2 flex flex-col gap-2">
               <button
                 onClick={handleConfirmEndSession}
-                className="w-full py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs tracking-wide transition cursor-pointer"
+                className="w-full py-3 rounded-xl bg-red-600 hover:bg-red-500 text-white font-bold text-xs tracking-wide transition cursor-pointer flex items-center justify-center gap-1.5"
               >
-                Yes, End Session & View Report
+                <span>Yes, End Session & View Report</span>
+                <kbd className="hidden sm:inline-block px-1.5 py-0.2 rounded bg-black/30 border border-white/20 text-[10px] font-mono">
+                  Enter
+                </kbd>
               </button>
               <button
                 onClick={() => setShowEndConfirm(false)}
-                className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs transition cursor-pointer"
+                className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium text-xs transition cursor-pointer flex items-center justify-center gap-1.5"
               >
-                Continue Solving
+                <span>Continue Solving</span>
+                <kbd className="hidden sm:inline-block px-1.5 py-0.2 rounded bg-slate-900 border border-slate-700 text-[10px] font-mono">
+                  Esc
+                </kbd>
               </button>
             </div>
           </div>
