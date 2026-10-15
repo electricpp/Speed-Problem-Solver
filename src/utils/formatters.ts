@@ -35,7 +35,7 @@ export function formatHumanDuration(totalSeconds: number): string {
   if (minutes > 0) {
     parts.push(`${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`);
   }
-  if (hours === 0 && (minutes === 0 || seconds > 0 && parts.length === 0)) {
+  if (hours === 0 && (minutes === 0 || (seconds > 0 && parts.length === 0))) {
     parts.push(`${seconds} ${seconds === 1 ? 'second' : 'seconds'}`);
   }
 
@@ -57,24 +57,60 @@ export function formatMinutesText(totalSeconds: number): string {
 
 /**
  * Generates the clean text format requested by the user, perfect for clipboard sharing.
- * Includes full subject metrics and detailed question-by-question solve logs.
+ * Handles both "Solve Problems" mode and "Topic Review" mode.
  */
 export function generateReportCopyText(report: SessionReport): string {
   const durationText = formatHumanDuration(report.totalSessionTime);
-  const timePerProblemText = report.totalProblemsSolved > 0 
+
+  // TOPIC REVIEW MODE
+  if (report.mode === 'topic_review') {
+    const totalTopics = report.totalTopicsStudied ?? 0;
+    const timePerTopicText = totalTopics > 0 && report.timePerTopic !== undefined
+      ? formatMinutesText(Math.round(report.timePerTopic))
+      : '0 minutes';
+
+    const lines = [
+      `Reviewed ${report.subject} (Topic Review) for ${durationText}.`,
+      `Total Topics studied: ${totalTopics}`,
+      `Time per topic: ${timePerTopicText}`,
+    ];
+
+    if (report.topicDetails && report.topicDetails.length > 0) {
+      lines.push('');
+      lines.push('--- Topic Logs ---');
+      report.topicDetails.forEach((t) => {
+        lines.push(`T${t.topicNumber}: ${formatMinutesText(Math.round(t.timeSpent))}`);
+      });
+    }
+
+    if (report.parkedThoughts && report.parkedThoughts.length > 0) {
+      lines.push('');
+      lines.push(`--- Parked Thoughts (${report.parkedThoughts.length}) ---`);
+      report.parkedThoughts.forEach((thought) => {
+        const status = thought.isHandled ? '[Handled]' : '[Pending]';
+        lines.push(`• [${thought.timestampFormatted}] ${thought.text} ${status}`);
+      });
+    }
+
+    return lines.join('\n');
+  }
+
+  // SOLVE PROBLEMS MODE (Default)
+  const totalSolved = report.totalProblemsSolved ?? 0;
+  const timePerProblemText = totalSolved > 0 && report.pureTimePerProblem !== undefined
     ? formatMinutesText(Math.round(report.pureTimePerProblem))
     : '0 minutes (None solved)';
-  
+
   const skippedText = report.skippedQuestions && report.skippedQuestions.length > 0
     ? report.skippedQuestions.map(q => `Q${q}`).join(', ')
     : 'None';
 
   const lines = [
     `Studied ${report.subject} for ${durationText}.`,
-    `Total Problems solved: ${report.totalProblemsSolved}`,
+    `Total Problems solved: ${totalSolved}`,
     `Time per problem: ${timePerProblemText}`,
-    `Total time on Investigation: ${formatMinutesText(report.totalInvestigationTime)}`,
-    `Total time on Studying concept: ${formatMinutesText(report.totalStudyConceptTime)}`,
+    `Total time on Investigation: ${formatMinutesText(report.totalInvestigationTime ?? 0)}`,
+    `Total time on Studying concept: ${formatMinutesText(report.totalStudyConceptTime ?? 0)}`,
     `Skipped Questions: ${skippedText}`,
   ];
 
@@ -91,6 +127,15 @@ export function generateReportCopyText(report: SessionReport): string {
         qLine += ` [${extras.join(', ')}]`;
       }
       lines.push(qLine);
+    });
+  }
+
+  if (report.parkedThoughts && report.parkedThoughts.length > 0) {
+    lines.push('');
+    lines.push(`--- Parked Thoughts (${report.parkedThoughts.length}) ---`);
+    report.parkedThoughts.forEach((thought) => {
+      const status = thought.isHandled ? '[Handled]' : '[Pending]';
+      lines.push(`• [${thought.timestampFormatted}] ${thought.text} ${status}`);
     });
   }
 

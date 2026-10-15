@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { X, Target, Clock, ArrowRight, Zap, Sparkles } from 'lucide-react';
-import { Subject, SessionConfig } from '../types';
+import { X, Target, Clock, ArrowRight, Zap, Sparkles, BookOpen, Layers } from 'lucide-react';
+import { Subject, SessionMode, SessionConfig } from '../types';
 import { soundManager, triggerHaptic } from '../utils/audio';
 
 interface SetupModalProps {
@@ -16,12 +16,14 @@ export const SetupModal: React.FC<SetupModalProps> = ({
   onClose,
   onStartSession,
 }) => {
-  const [targetQuestions, setTargetQuestions] = useState<number>(10);
+  const [mode, setMode] = useState<SessionMode>('solve_problems');
+  const [targetGoal, setTargetGoal] = useState<number>(10);
   const [timeConstraintMinutes, setTimeConstraintMinutes] = useState<string>('');
 
   if (!isOpen || !subject) return null;
 
-  const quickGoalPresets = [5, 10, 15, 20, 25, 30];
+  const quickProblemPresets = [5, 10, 15, 20, 25, 30];
+  const quickTopicPresets = [3, 5, 8, 10, 15, 20];
   const quickTimePresets = [15, 30, 45, 60];
 
   const handleStart = (e: React.FormEvent) => {
@@ -29,13 +31,14 @@ export const SetupModal: React.FC<SetupModalProps> = ({
     soundManager.playClick();
     triggerHaptic('success');
 
-    const target = Math.max(1, targetQuestions || 10);
+    const target = Math.max(1, targetGoal || (mode === 'topic_review' ? 5 : 10));
     const parsedTime = timeConstraintMinutes.trim() ? parseInt(timeConstraintMinutes, 10) : null;
     const validTime = parsedTime && parsedTime > 0 ? parsedTime : null;
 
     onStartSession({
       subject,
-      targetQuestions: target,
+      mode,
+      targetGoal: target,
       timeConstraintMinutes: validTime,
     });
   };
@@ -92,15 +95,77 @@ export const SetupModal: React.FC<SetupModalProps> = ({
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleStart} className="p-5 space-y-6">
-          {/* Target Questions Input */}
-          <div className="space-y-2.5">
+        <form onSubmit={handleStart} className="p-5 space-y-5">
+          {/* Mode Selection Tabs */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-slate-300">Session Mode</label>
+            <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-slate-950/80 border border-slate-800">
+              <button
+                type="button"
+                onClick={() => {
+                  soundManager.playClick();
+                  triggerHaptic('light');
+                  setMode('solve_problems');
+                  if (targetGoal === 5 && quickTopicPresets.includes(targetGoal)) {
+                    setTargetGoal(10);
+                  }
+                }}
+                className={`py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+                  mode === 'solve_problems'
+                    ? 'bg-cyan-500 text-slate-950 shadow-md'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                }`}
+              >
+                <Zap className="w-3.5 h-3.5" />
+                <span>Solve Problems</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  soundManager.playClick();
+                  triggerHaptic('light');
+                  setMode('topic_review');
+                  if (targetGoal === 10) {
+                    setTargetGoal(5);
+                  }
+                }}
+                className={`py-2 px-3 rounded-lg text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
+                  mode === 'topic_review'
+                    ? 'bg-amber-400 text-slate-950 shadow-md'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                }`}
+              >
+                <BookOpen className="w-3.5 h-3.5" />
+                <span>Topic Review</span>
+              </button>
+            </div>
+            <p className="text-[11px] text-slate-400 px-0.5">
+              {mode === 'solve_problems'
+                ? 'Time per problem, investigation, and concept timer breakdown.'
+                : 'Goal of topics (T1, T2...), average time per topic & total time.'}
+            </p>
+          </div>
+
+          {/* Target Goal Input (Problems or Topics) */}
+          <div className="space-y-2.5 pt-1 border-t border-slate-800/60">
             <div className="flex items-center justify-between">
               <label htmlFor="target-input" className="text-xs font-semibold text-slate-200 flex items-center gap-1.5">
-                <Target className="w-4 h-4 text-cyan-400" />
-                <span>Target Problems</span>
+                {mode === 'solve_problems' ? (
+                  <>
+                    <Target className="w-4 h-4 text-cyan-400" />
+                    <span>Target Problems</span>
+                  </>
+                ) : (
+                  <>
+                    <Layers className="w-4 h-4 text-amber-400" />
+                    <span>Target Topics</span>
+                  </>
+                )}
               </label>
-              <span className="text-xs text-slate-400">Questions planned</span>
+              <span className="text-xs text-slate-400">
+                {mode === 'solve_problems' ? 'Questions planned' : 'Topics planned'}
+              </span>
             </div>
 
             <div className="relative">
@@ -109,34 +174,36 @@ export const SetupModal: React.FC<SetupModalProps> = ({
                 type="number"
                 min="1"
                 max="999"
-                value={targetQuestions}
-                onChange={(e) => setTargetQuestions(parseInt(e.target.value) || 1)}
+                value={targetGoal}
+                onChange={(e) => setTargetGoal(parseInt(e.target.value) || 1)}
                 className="w-full h-12 rounded-xl bg-slate-800/80 border border-slate-700 focus:border-cyan-400 focus:ring-1 focus:ring-cyan-400 text-white px-4 text-base font-semibold font-tabular outline-none transition"
                 required
               />
               <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-slate-400 font-medium">
-                Problems
+                {mode === 'solve_problems' ? 'Problems' : 'Topics'}
               </span>
             </div>
 
             {/* Quick Preset Buttons */}
             <div className="flex flex-wrap gap-1.5 pt-1">
-              {quickGoalPresets.map((qty) => (
+              {(mode === 'solve_problems' ? quickProblemPresets : quickTopicPresets).map((qty) => (
                 <button
                   type="button"
                   key={qty}
                   onClick={() => {
                     soundManager.playClick();
                     triggerHaptic('light');
-                    setTargetQuestions(qty);
+                    setTargetGoal(qty);
                   }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ${
-                    targetQuestions === qty
-                      ? 'bg-cyan-500 text-slate-950 font-bold shadow-sm'
+                    targetGoal === qty
+                      ? mode === 'solve_problems'
+                        ? 'bg-cyan-500 text-slate-950 font-bold shadow-sm'
+                        : 'bg-amber-400 text-slate-950 font-bold shadow-sm'
                       : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
                   }`}
                 >
-                  {qty} Qs
+                  {qty} {mode === 'solve_problems' ? 'Qs' : 'Topics'}
                 </button>
               ))}
             </div>
@@ -195,7 +262,7 @@ export const SetupModal: React.FC<SetupModalProps> = ({
                     soundManager.playClick();
                     setTimeConstraintMinutes('');
                   }}
-                  className="px-2.5 py-1.5 rounded-lg text-xs text-slate-400 hover:text-white bg-slate-800/50 hover:bg-slate-800 transition"
+                  className="px-2.5 py-1.5 rounded-lg text-xs text-slate-400 hover:text-white bg-slate-800/50 hover:bg-slate-800 transition cursor-pointer"
                 >
                   Clear Limit
                 </button>
@@ -207,10 +274,23 @@ export const SetupModal: React.FC<SetupModalProps> = ({
           <div className="pt-2 flex flex-col gap-2">
             <button
               type="submit"
-              className={`w-full h-12 rounded-xl text-white font-bold text-sm tracking-wide shadow-lg flex items-center justify-center gap-2 transition active:scale-[0.98] cursor-pointer ${theme.ctaGradient} ${theme.glow}`}
+              className={`w-full h-12 rounded-xl text-white font-bold text-sm tracking-wide shadow-lg flex items-center justify-center gap-2 transition active:scale-[0.98] cursor-pointer ${
+                mode === 'topic_review'
+                  ? 'bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 shadow-amber-500/20 text-slate-950'
+                  : `${theme.ctaGradient} ${theme.glow}`
+              }`}
             >
-              <Zap className="w-4 h-4 fill-current" />
-              <span>Start Solving</span>
+              {mode === 'solve_problems' ? (
+                <>
+                  <Zap className="w-4 h-4 fill-current" />
+                  <span>Start Solving</span>
+                </>
+              ) : (
+                <>
+                  <BookOpen className="w-4 h-4" />
+                  <span>Start Topic Review</span>
+                </>
+              )}
               <ArrowRight className="w-4 h-4" />
             </button>
 

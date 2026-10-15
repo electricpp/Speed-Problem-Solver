@@ -304,6 +304,32 @@ class SoundManager {
       osc.stop(now + offset + 0.12);
     });
   }
+
+  /**
+   * Quick, crisp affirmative chirp when a stray thought is parked.
+   */
+  public playThoughtParked(): void {
+    if (!this.soundEnabled) return;
+    const ctx = this.getContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, now); // A5
+    osc.frequency.exponentialRampToValueAtTime(1320, now + 0.09); // E6
+
+    gain.gain.setValueAtTime(0.2, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.12);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    osc.start(now);
+    osc.stop(now + 0.12);
+  }
 }
 
 export const soundManager = new SoundManager();

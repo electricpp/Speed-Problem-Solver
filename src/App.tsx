@@ -13,14 +13,21 @@ import {
   Sparkles,
   ArrowRight,
   Flame,
+  Brain,
+  BookOpen,
 } from 'lucide-react';
-import { Subject, SessionConfig, SessionReport } from './types';
+import { Subject, SessionConfig, SessionReport, ParkedThought } from './types';
 import {
   loadHistory,
   saveSessionToHistory,
   deleteSessionFromHistory,
   clearAllHistory,
   calculateSummaryStats,
+  loadParkedThoughts,
+  updateParkedThoughtStatus,
+  deleteParkedThought,
+  clearHandledParkedThoughts,
+  saveParkedThought,
 } from './utils/storage';
 import { soundManager, triggerHaptic } from './utils/audio';
 import { formatMinutesText, formatHumanDuration } from './utils/formatters';
@@ -29,6 +36,7 @@ import { SetupModal } from './components/SetupModal';
 import { HistoryModal } from './components/HistoryModal';
 import { PracticeScreen } from './components/PracticeScreen';
 import { ReportScreen } from './components/ReportScreen';
+import { ParkingLotModal } from './components/ParkingLotModal';
 
 type AppView = 'home' | 'practice' | 'report';
 
@@ -37,14 +45,17 @@ export default function App() {
   const [selectedSubject, setSelectedSubject] = useState<Subject | null>(null);
   const [isSetupOpen, setIsSetupOpen] = useState<boolean>(false);
   const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
+  const [isParkingLotOpen, setIsParkingLotOpen] = useState<boolean>(false);
   const [activeConfig, setActiveConfig] = useState<SessionConfig | null>(null);
   const [currentReport, setCurrentReport] = useState<SessionReport | null>(null);
   const [history, setHistory] = useState<SessionReport[]>([]);
+  const [parkedThoughts, setParkedThoughts] = useState<ParkedThought[]>([]);
   const [isSoundOn, setIsSoundOn] = useState<boolean>(soundManager.isEnabled());
 
-  // Load history on mount
+  // Load history and parked thoughts on mount
   useEffect(() => {
     setHistory(loadHistory());
+    setParkedThoughts(loadParkedThoughts());
   }, []);
 
   const handleToggleSound = () => {
@@ -66,10 +77,11 @@ export default function App() {
   };
 
   const handleEndSession = (report: SessionReport) => {
-    // Save report to localStorage immediately
-    const updated = saveSessionToHistory(report);
-    setHistory(updated);
+    const updatedHistory = saveSessionToHistory(report);
+    setHistory(updatedHistory);
     setCurrentReport(report);
+    // Reload parked thoughts to reflect thoughts added during the session
+    setParkedThoughts(loadParkedThoughts());
     setView('report');
   };
 
@@ -77,6 +89,7 @@ export default function App() {
     setSelectedSubject(null);
     setActiveConfig(null);
     setCurrentReport(null);
+    setParkedThoughts(loadParkedThoughts());
     setView('home');
   };
 
@@ -90,7 +103,40 @@ export default function App() {
     setHistory([]);
   };
 
+  // Parking Lot Handlers
+  const handleToggleThoughtStatus = (id: string, isHandled: boolean) => {
+    const updated = updateParkedThoughtStatus(id, isHandled);
+    setParkedThoughts(updated);
+  };
+
+  const handleDeleteThought = (id: string) => {
+    const updated = deleteParkedThought(id);
+    setParkedThoughts(updated);
+  };
+
+  const handleClearHandledThoughts = () => {
+    const updated = clearHandledParkedThoughts();
+    setParkedThoughts(updated);
+  };
+
+  const handleAddManualThought = (text: string) => {
+    const now = new Date();
+    const newThought: ParkedThought = {
+      id: `thought_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+      sessionId: 'manual_home',
+      subject: 'Physics',
+      sessionMode: 'solve_problems',
+      text,
+      createdAt: now.toISOString(),
+      timestampFormatted: now.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }),
+      isHandled: false,
+    };
+    const updated = saveParkedThought(newThought);
+    setParkedThoughts(updated);
+  };
+
   const stats = calculateSummaryStats(history);
+  const pendingThoughtsCount = parkedThoughts.filter((t) => !t.isHandled).length;
 
   // Subject Card Definitions
   const subjects: {
@@ -153,7 +199,7 @@ export default function App() {
         /* HOME SCREEN */
         <div className="flex-1 flex flex-col justify-between max-w-4xl mx-auto w-full px-4 sm:px-6 py-4 sm:py-6">
           {/* Top Bar Navigation */}
-          <header className="flex items-center justify-between pb-4 border-b border-slate-800/80">
+          <header className="flex items-center justify-between pb-4 border-b border-slate-800/80 gap-2">
             {/* Brand Zone */}
             <div className="flex items-center gap-2.5">
               <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center text-slate-950 font-black shadow-lg shadow-cyan-500/20">
@@ -170,8 +216,31 @@ export default function App() {
             </div>
 
             {/* Actions Zone */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2">
               <PWAInstallButton />
+
+              {/* Distraction Parking Lot Header Button */}
+              <button
+                onClick={() => {
+                  soundManager.playClick();
+                  triggerHaptic('light');
+                  setIsParkingLotOpen(true);
+                }}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition cursor-pointer ${
+                  pendingThoughtsCount > 0
+                    ? 'bg-amber-500/10 border-amber-500/40 text-amber-300 hover:bg-amber-500/20'
+                    : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+                }`}
+                title="Distraction Parking Lot"
+              >
+                <Brain className="w-4 h-4 text-amber-400" />
+                <span className="hidden sm:inline">Parking Lot</span>
+                {pendingThoughtsCount > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-amber-400 text-slate-950 font-tabular">
+                    {pendingThoughtsCount}
+                  </span>
+                )}
+              </button>
 
               <button
                 onClick={handleToggleSound}
@@ -206,18 +275,46 @@ export default function App() {
             </div>
           </header>
 
+          {/* Pending Parked Thoughts Callout Banner */}
+          {pendingThoughtsCount > 0 && (
+            <div className="mt-3 p-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-3 animate-in fade-in">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-amber-400/20 text-amber-300 flex items-center justify-center shrink-0">
+                  <Brain className="w-4 h-4" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-white">
+                    {pendingThoughtsCount} parked thought{pendingThoughtsCount === 1 ? '' : 's'} waiting for review
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    Offloaded during recent sessions so you could stay in the flow
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  soundManager.playClick();
+                  setIsParkingLotOpen(true);
+                }}
+                className="px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold text-xs transition cursor-pointer shrink-0"
+              >
+                Review Thoughts
+              </button>
+            </div>
+          )}
+
           {/* Hero & Focus Prompt */}
-          <main className="py-6 sm:py-8 space-y-6 sm:space-y-8 flex-1 flex flex-col justify-center">
+          <main className="py-5 sm:py-7 space-y-5 sm:space-y-7 flex-1 flex flex-col justify-center">
             <div className="text-center space-y-2 max-w-xl mx-auto">
               <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-semibold mb-1">
                 <Flame className="w-3.5 h-3.5" />
-                <span>Speed Training Mode</span>
+                <span>Speed Training & Topic Review</span>
               </div>
               <h1 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight">
-                What are you solving today?
+                What are you studying today?
               </h1>
               <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto">
-                Train yourself to solve problems faster. Track your solving velocity, investigation time, and concept reviews.
+                Train yourself to solve problems faster. Choose between <strong className="text-cyan-300">Solve Problems</strong> with precision timers or <strong className="text-amber-300">Topic Review</strong> goals.
               </p>
             </div>
 
@@ -247,7 +344,7 @@ export default function App() {
 
                   <div className="pt-3 border-t border-slate-800/60 mt-3 flex items-center justify-between">
                     <span className="text-[11px] font-semibold tracking-wider uppercase text-slate-400 group-hover:text-white transition">
-                      Start Practice
+                      Start Session
                     </span>
                     <span className={`text-[10px] px-2 py-0.5 rounded-md border font-mono ${sub.accentBg} ${sub.accentText}`}>
                       SPEED
@@ -273,7 +370,7 @@ export default function App() {
                   </button>
                 </div>
 
-                <div className="grid grid-cols-3 gap-2 pt-3 text-center">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-3 text-center">
                   <div>
                     <div className="text-[11px] text-slate-400">Problems Solved</div>
                     <div className="text-lg sm:text-xl font-extrabold text-white font-tabular mt-0.5">
@@ -282,7 +379,14 @@ export default function App() {
                   </div>
 
                   <div>
-                    <div className="text-[11px] text-slate-400">Avg Pure Speed</div>
+                    <div className="text-[11px] text-slate-400">Topics Reviewed</div>
+                    <div className="text-lg sm:text-xl font-extrabold text-amber-300 font-tabular mt-0.5">
+                      {stats.totalTopicsStudied}
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="text-[11px] text-slate-400">Avg Pure Solve</div>
                     <div className="text-lg sm:text-xl font-extrabold text-cyan-300 font-tabular mt-0.5">
                       {stats.totalProblemsSolved > 0
                         ? formatMinutesText(Math.round(stats.avgPureTime))
@@ -291,7 +395,7 @@ export default function App() {
                   </div>
 
                   <div>
-                    <div className="text-[11px] text-slate-400">Total Practice Time</div>
+                    <div className="text-[11px] text-slate-400">Total Study Time</div>
                     <div className="text-lg sm:text-xl font-extrabold text-slate-200 font-tabular mt-0.5">
                       {formatHumanDuration(stats.totalSeconds)}
                     </div>
@@ -304,7 +408,7 @@ export default function App() {
           {/* Footer */}
           <footer className="pt-4 border-t border-slate-800/80 text-center text-xs text-slate-500">
             <p>
-              Designed for Speed Problem Solving · Physics · Chemistry · Math · Universal Exo 2 Font
+              Designed for Speed Training · Solve Problems & Topic Review · Universal Exo 2 Font
             </p>
           </footer>
         </div>
@@ -326,6 +430,17 @@ export default function App() {
         onDeleteSession={handleDeleteSession}
         onClearAll={handleClearAllHistory}
         onImportHistory={(updated) => setHistory(updated)}
+      />
+
+      {/* Distraction Parking Lot Modal */}
+      <ParkingLotModal
+        isOpen={isParkingLotOpen}
+        onClose={() => setIsParkingLotOpen(false)}
+        thoughts={parkedThoughts}
+        onToggleStatus={handleToggleThoughtStatus}
+        onDeleteThought={handleDeleteThought}
+        onClearHandled={handleClearHandledThoughts}
+        onAddManualThought={handleAddManualThought}
       />
     </div>
   );
